@@ -478,4 +478,4 @@ jobs:
                --verbose \
                --header "Authorization: Bearer ${TOKEN}" \
                --form bundle=@bundle.zip \
-               https://central.sonatype.com/api/v1/publisher/upload
+               "https://central.sonatype.com/api/v1/publisher/upload?name=Infinispan%20Lua51%20${VERSION}"
