@@ -41,6 +41,9 @@ on:
         default: ''
         type: string
 
+permissions:
+  contents: write
+
 jobs:
   # Creates the source artifact by cloning and merging upstream repositories
   clone-and-verify:
