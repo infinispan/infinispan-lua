@@ -35,6 +35,10 @@ configurations {
 
 dependencies {
     api project(':luajava')
+
+    // Infinispan: functional tests for the Redis data modules (RedisModulesTest)
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.10.2'
 }
 
 apply plugin: 'com.badlogicgames.gdx.gdx-jnigen'
@@ -135,3 +139,32 @@ tasks.register('platformSourcesJar', Jar) {
 }
 
 tasks.jnigen.dependsOn(tasks.build)
+
+// Infinispan: the Redis-module functional tests need the built native on the
+// classpath. They must NOT run in the normal build lifecycle, because the
+// native is produced later in the task graph (jnigenBuildLinux64 -> jnigen ->
+// build), which would both fail (no .so yet) and form a dependency cycle if
+// `test` depended on it. So exclude them from `test` and run them via the
+// dedicated `redisModuleTest` task after the native has been built (in a
+// separate gradle invocation).
+test {
+    useJUnitPlatform()
+    exclude '**/RedisModulesTest*'
+}
+
+// gdx's SharedLibraryLoader loads the .so as a classpath resource at root
+// (libs/linux64/liblua5164.so -> "/liblua5164.so"), hence files(libs/linux64).
+// Build the native first:  ./gradlew :lua51:jnigenBuildLinux64
+// then run:                ./gradlew :lua51:redisModuleTest
+tasks.register('redisModuleTest', Test) {
+    group = 'verification'
+    description = 'Functional tests for the Redis data modules (cjson/cmsgpack/struct/bit) against the host native'
+    dependsOn 'testClasses'
+    useJUnitPlatform()
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath + files("$projectDir/libs/linux64")
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+        exceptionFormat 'full'
+    }
+}
