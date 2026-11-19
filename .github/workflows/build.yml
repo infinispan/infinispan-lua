@@ -186,9 +186,9 @@ jobs:
   # Job 2: Build native libraries for Apple platforms
   # Builds: macOS (x86_64, ARM64) and iOS
   apple-natives:
-    runs-on: macos-13
+    runs-on: macos-15
     env:
-      MACOSX_DEPLOYMENT_TARGET: "10.10"
+      MACOSX_DEPLOYMENT_TARGET: "10.13"
     steps:
       - uses: actions/checkout@v4
         with:
