@@ -193,6 +193,17 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: 'recursive'
+      # The build uses a Java 8 toolchain to compile. macos-15 is Apple Silicon
+      # (arm64) and has no preinstalled JDK 8; Temurin/Adoptium does not publish
+      # a JDK 8 for macOS aarch64, so Gradle auto-provisioning 404s. Install JDK 8
+      # from Azul Zulu, which does provide macOS aarch64 builds, so Gradle detects
+      # it instead of trying to download Temurin.
+      - name: Set up JDK 8 (Zulu)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '8'
+      - run: echo "JAVA_8=$JAVA_HOME" >> $GITHUB_ENV
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
