@@ -142,11 +142,19 @@ jobs:
           # TODO: ./gradlew jniGen jnigenBuildLinuxRISCV64
           ./gradlew jniGen jnigenBuildWindows jnigenBuildWindows64 jnigenBuildWindowsARM64 # skip jnigenBuildAndroid
           
+      - name: Redis module functional tests (lua51, Linux64)
+        run: |
+          cd luajava
+          # Runs after jnigenBuildLinux64 (above) so liblua5164.so exists on the
+          # test classpath. Verifies cjson/cmsgpack/struct/bit are auto-opened and
+          # work, and that os is sandboxed to os.clock (Redis parity).
+          ./gradlew --info --stacktrace :lua51:redisModuleTest
+
       - name: Test (Desktop)
         run: |
           cd luajava
           ./gradlew --info --stacktrace :example:test :jsr223:test :jpms-example:run
-          
+
       - name: Jacoco Test Report
         run: |
           cd luajava
