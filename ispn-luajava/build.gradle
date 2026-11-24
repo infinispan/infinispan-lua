@@ -52,6 +52,21 @@ subprojects { it ->
     }
 }
 
+// jpms-example requests a JDK 9 toolchain upstream, but no vendor ships a JDK 9
+// for macOS/aarch64, so Gradle auto-provisioning 404s on Apple Silicon runners
+// (the old api.adoptopenjdk.net endpoint is also defunct). JPMS only needs
+// JDK 9+, so override to JDK 17 — available on every CI runner. Done in
+// projectsEvaluated so it runs after jpms-example's own build script sets of(9).
+gradle.projectsEvaluated {
+    def jpms = findProject(':jpms-example')
+    if (jpms != null) {
+        def javaExt = jpms.extensions.findByType(JavaPluginExtension)
+        if (javaExt != null) {
+            javaExt.toolchain.languageVersion = JavaLanguageVersion.of(17)
+        }
+    }
+}
+
 ext {
     jdk = JavaVersion.current().majorVersion
     jdkJavadoc = "https://docs.oracle.com/javase/8/docs/api/"
