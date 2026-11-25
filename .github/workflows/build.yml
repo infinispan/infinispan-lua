@@ -142,11 +142,19 @@ jobs:
           # TODO: ./gradlew jniGen jnigenBuildLinuxRISCV64
           ./gradlew jniGen jnigenBuildWindows jnigenBuildWindows64 jnigenBuildWindowsARM64 # skip jnigenBuildAndroid
           
+      - name: Redis module functional tests (lua51, Linux64)
+        run: |
+          cd luajava
+          # Runs after jnigenBuildLinux64 (above) so liblua5164.so exists on the
+          # test classpath. Verifies cjson/cmsgpack/struct/bit are auto-opened and
+          # work, and that os is sandboxed to os.clock (Redis parity).
+          ./gradlew --info --stacktrace :lua51:redisModuleTest
+
       - name: Test (Desktop)
         run: |
           cd luajava
           ./gradlew --info --stacktrace :example:test :jsr223:test :jpms-example:run
-          
+
       - name: Jacoco Test Report
         run: |
           cd luajava
@@ -178,13 +186,24 @@ jobs:
   # Job 2: Build native libraries for Apple platforms
   # Builds: macOS (x86_64, ARM64) and iOS
   apple-natives:
-    runs-on: macos-13
+    runs-on: macos-15
     env:
-      MACOSX_DEPLOYMENT_TARGET: "10.10"
+      MACOSX_DEPLOYMENT_TARGET: "10.13"
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: 'recursive'
+      # The build uses a Java 8 toolchain to compile. macos-15 is Apple Silicon
+      # (arm64) and has no preinstalled JDK 8; Temurin/Adoptium does not publish
+      # a JDK 8 for macOS aarch64, so Gradle auto-provisioning 404s. Install JDK 8
+      # from Azul Zulu, which does provide macOS aarch64 builds, so Gradle detects
+      # it instead of trying to download Temurin.
+      - name: Set up JDK 8 (Zulu)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '8'
+      - run: echo "JAVA_8=$JAVA_HOME" >> $GITHUB_ENV
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
