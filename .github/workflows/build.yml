@@ -380,6 +380,10 @@ jobs:
       - windows-testing
       - linux-testing
     runs-on: ubuntu-22.04
+    outputs:
+      version: ${{ steps.release-info.outputs.version }}
+      group_path: ${{ steps.release-info.outputs.group_path }}
+      skip_publish: ${{ steps.release-info.outputs.skip_publish }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -416,18 +420,28 @@ jobs:
           github-token: ${{ github.token }}
           run-id: ${{ inputs.run-id || github.event.workflow_run.id }}
       - name: Set version from artifact
+        id: release-info
         run: |
+          VERSION=""
+          MAVEN_GROUP_ID=""
+          SKIP_PUBLISH="false"
           if [ -f luajava/version.txt ]; then
-            echo "VERSION=$(cat luajava/version.txt)" >> $GITHUB_ENV
+            VERSION="$(cat luajava/version.txt)"
           fi
           if [ -f luajava/maven-group-id.txt ]; then
-            echo "MAVEN_GROUP_ID=$(cat luajava/maven-group-id.txt)" >> $GITHUB_ENV
+            MAVEN_GROUP_ID="$(cat luajava/maven-group-id.txt)"
           fi
           if [ -f luajava/skip-publish.txt ]; then
-            echo "SKIP_PUBLISH=$(cat luajava/skip-publish.txt)" >> $GITHUB_ENV
-          else
-            echo "SKIP_PUBLISH=false" >> $GITHUB_ENV
+            SKIP_PUBLISH="$(cat luajava/skip-publish.txt)"
           fi
+          # Export to job environment for subsequent steps
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+          echo "MAVEN_GROUP_ID=${MAVEN_GROUP_ID}" >> $GITHUB_ENV
+          echo "SKIP_PUBLISH=${SKIP_PUBLISH}" >> $GITHUB_ENV
+          # Export as job outputs for the downstream wait-for-central job
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "group_path=$(echo "${MAVEN_GROUP_ID}" | tr '.' '/')" >> $GITHUB_OUTPUT
+          echo "skip_publish=${SKIP_PUBLISH}" >> $GITHUB_OUTPUT
       - name: JniGen
         run: |
           cd luajava
@@ -502,4 +516,25 @@ jobs:
                --verbose \
                --header "Authorization: Bearer ${TOKEN}" \
                --form bundle=@bundle.zip \
-               "https://central.sonatype.com/api/v1/publisher/upload?name=Infinispan%20Lua51%20${VERSION}"
+               "https://central.sonatype.com/api/v1/publisher/upload?name=Infinispan%20Lua51%20${VERSION}&publishingType=AUTOMATIC"
+
+  # Job 6: Wait for the released artifact to propagate to Maven Central
+  # Only runs for published releases (non-SNAPSHOT). Polls repo1.maven.org
+  # until the platform POM is retrievable (HTTP 200), so the workflow does not
+  # report success until the artifact is actually consumable from Maven Central.
+  wait-for-central:
+    name: Wait for release on Maven Central
+    needs: pack-and-publish-natives
+    runs-on: ubuntu-latest
+    if: >-
+      needs.pack-and-publish-natives.outputs.skip_publish != 'true' &&
+      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) &&
+      !endsWith(needs.pack-and-publish-natives.outputs.version, '-SNAPSHOT')
+    steps:
+      - name: Poll Maven Central until the artifact is available
+        uses: GOSCHEN/http-status-code@944938ed534b092b9f7e1e5c6b08c5d9bbc35162 # v1.1.0
+        with:
+          url: https://repo1.maven.org/maven2/${{ needs.pack-and-publish-natives.outputs.group_path }}/infinispan-lua51-platform/${{ needs.pack-and-publish-natives.outputs.version }}/infinispan-lua51-platform-${{ needs.pack-and-publish-natives.outputs.version }}.pom
+          code: 200
+          timeout: 10800000
+          interval: 1200
